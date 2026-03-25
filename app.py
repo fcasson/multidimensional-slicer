@@ -55,9 +55,15 @@ for col in BOOL_COLS:
 discrete_widgets = {}
 for col in DISCRETE_COLS:
     unique_vals = sorted(DF[col].dropna().unique().tolist())
-    discrete_widgets[col] = pn.widgets.MultiChoice(
-        name=col, options=unique_vals, value=unique_vals
+    str_vals = [str(v) for v in unique_vals]
+    discrete_widgets[col] = pn.widgets.CheckButtonGroup(
+        name=col, options=str_vals, value=str_vals,
     )
+# Map string labels back to original values for filtering
+_discrete_val_map = {}
+for col in DISCRETE_COLS:
+    unique_vals = sorted(DF[col].dropna().unique().tolist())
+    _discrete_val_map[col] = {str(v): v for v in unique_vals}
 
 # ---------------------------------------------------------------------------
 # Widgets — range sliders for continuous numeric columns
@@ -96,8 +102,8 @@ def _filter_df():
     # Discrete filters
     for col, widget in discrete_widgets.items():
         if widget.value:
-            # Include NaN rows (unfiltered) alongside selected values
-            mask &= DF[col].isin(widget.value) | DF[col].isna()
+            selected = [_discrete_val_map[col][s] for s in widget.value]
+            mask &= DF[col].isin(selected) | DF[col].isna()
         else:
             # No values selected → show nothing
             mask &= False
@@ -204,7 +210,8 @@ def _reset_controls(_event=None):
     for w in bool_widgets.values():
         w.value = "Any"
     for col, w in discrete_widgets.items():
-        w.value = sorted(DF[col].dropna().unique().tolist())
+        all_str = list(_discrete_val_map[col].keys())
+        w.value = all_str
     for w in range_sliders.values():
         w.value = (w.start, w.end)
 
@@ -241,7 +248,11 @@ mapping_section = pn.Column("### Mapping", color_select, size_select)
 
 bool_section = pn.Column("### Boolean Filters", *bool_widgets.values()) if bool_widgets else pn.Column()
 
-discrete_section = pn.Column("### Discrete Filters", *discrete_widgets.values()) if discrete_widgets else pn.Column()
+discrete_section_items = []
+for col, w in discrete_widgets.items():
+    discrete_section_items.append(pn.pane.Markdown(f"**{col}**"))
+    discrete_section_items.append(w)
+discrete_section = pn.Column("### Discrete Filters", *discrete_section_items) if discrete_widgets else pn.Column()
 
 slider_section = pn.Column("### Range Filters", *range_sliders.values()) if range_sliders else pn.Column()
 

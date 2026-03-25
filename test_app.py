@@ -59,7 +59,8 @@ class TestFiltering:
         filtered = app._filter_df()
         # Rows with psi_n == selected value OR psi_n == NaN pass through
         non_nan = filtered["psi_n"].dropna()
-        assert set(non_nan.unique()) == {all_vals[0]}
+        expected = app._discrete_val_map["psi_n"][all_vals[0]]
+        assert set(non_nan.unique()) == {expected}
         w.value = all_vals  # reset
 
     def test_empty_discrete_returns_nothing(self):
