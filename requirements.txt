@@ -3,4 +3,5 @@ plotly
 pandas
 holoviews
 datashader
+pyrokinetics
 pytest
