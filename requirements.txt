@@ -1,0 +1,6 @@
+panel
+plotly
+pandas
+holoviews
+datashader
+pytest
