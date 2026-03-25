@@ -13,12 +13,13 @@ TL;DR — Build a lightweight local Python app using Panel + Plotly. Use dropdow
 | Total columns | 26 (including index) |
 | Numeric axes (selectable) | `q`, `shat`, `beta`, `gamma_exb`, `electron_dens_gradient`, `electron_nu`, `betaprime`, `electron_temp_gradient`, `deuterium_temp_gradient`, `psi_n`, `shift`, `delta`, `deltaprime`, `kappa`, `kappaprime`, `betaprime_correct`, `IBMgr` (17 cols) |
 | Boolean filters | `isapar`, `isbpar` |
-| Columns to drop | unnamed index col 0, `Unnamed: 18`–`22`, `electron_nu.1` (duplicate of `electron_nu`) |
+| Columns to drop | unnamed index col 0, `Unnamed: 18`–`22` |
+| Columns renamed | `electron_nu.1` → `electron_nu_ref` (constant reference value, not a duplicate) |
 
 **Notes on columns:**
-- `betaprime_correct` appears to be a corrected version of `betaprime` — keep both and let the user choose, but default colour-mapping to `betaprime_correct`.
-- `electron_nu.1` has identical values to `electron_nu` in sampled rows — verify at load time and drop if duplicate.
-- `psi_n` takes a small set of discrete values (e.g. 0.536, 0.637, 0.851) — may be better as a discrete selector than a continuous slider.
+- `betaprime_correct` appears to be a corrected version of `betaprime` — both are kept as selectable axes.
+- `electron_nu.1` is a single constant (0.000514) across all rows — renamed to `electron_nu_ref`.
+- `psi_n` has only 5 unique values and is 99.35% NaN (65/10,000 rows populated) — treated as a discrete filter with NaN passthrough.
 
 ---
 
@@ -39,10 +40,10 @@ TL;DR — Build a lightweight local Python app using Panel + Plotly. Use dropdow
 
 #### 3. Controls
 - **Axis dropdowns** (`pn.widgets.Select`): X, Y, Z (Z default = `None` → 2D mode). Populate from `numeric_cols`. Prevent selecting the same column for multiple axes.
-- **Colour / size dropdowns**: optional mapping to any numeric column (colour default = `betaprime_correct`).
+- **Colour / size dropdowns**: optional mapping to any numeric column (colour default = `q`).
 - **Boolean filter checkboxes**: one per bool col (`isapar`, `isbpar`) — tri-state: True / False / Any.
 - **Dimension sliders**: auto-generated `RangeSlider` for each numeric col *not* currently assigned to an axis. Include a global "slice width %" control that sets default range breadth.
-- **Discrete selectors**: for columns like `psi_n` with few unique values, use `MultiChoice` widget instead of a slider.
+- **Discrete selectors**: for columns with few unique values, use `CheckButtonGroup` widget (togglable buttons showing active state clearly).
 
 #### 4. Plotting logic
 - Filter dataframe by all active slider ranges, boolean filters, and discrete selectors.
@@ -96,13 +97,13 @@ The CSV stays at the workspace root (`IdealBallooningSamples.csv`) — no need t
 - **Panel over Dash** — simpler single-file serving, sufficient for local exploration. Panel's `--autoreload` flag supports live development.
 - **10k rows** — well within Plotly's WebGL scatter limit (~100k). Datashader is a future optimisation, not a launch requirement.
 - **No imputation** — physicist users will prefer seeing data gaps over silently filled values.
-- **`betaprime_correct` as default colour** — it's the corrected physics quantity and varies across the full range.
+- **`q` as default colour** — safety factor gives good visual separation across the parameter space.
 
 ---
 
-### Open Questions
+### Open Questions (Resolved)
 
-1. Should `psi_n` (and any other low-cardinality column) be treated as a discrete filter by default, or should the user choose?
-2. Do you want the ability to **save/load slice presets** (JSON file with widget states) for reproducible views?
-3. Any preferred **colour scales** for the physics quantities (e.g. diverging for `betaprime_correct`, sequential for `IBMgr`)?
+1. ~~Should `psi_n` be treated as discrete?~~ **Yes** — auto-classified by ≤10 unique values threshold. All low-cardinality columns get `CheckButtonGroup`.
+2. ~~Save/load slice presets?~~ **Not yet implemented** — deferred to future work.
+3. ~~Colour scales?~~ **Default Plotly continuous scale** — no custom diverging/sequential maps yet.
 
