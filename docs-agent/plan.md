@@ -107,3 +107,81 @@ The CSV stays at the workspace root (`IdealBallooningSamples.csv`) — no need t
 2. ~~Save/load slice presets?~~ **Not yet implemented** — deferred to future work.
 3. ~~Colour scales?~~ **Default Plotly continuous scale** — no custom diverging/sequential maps yet.
 
+---
+
+## Phase 2: IBMgr Generator
+
+TL;DR — CLI-driven tool that wraps pyrokinetics to sweep geometry parameters (kappa, delta) across kinetic parameter samples drawn from an existing dataset, computing ideal ballooning mode growth rates (IBMgr) for each combination. Outputs a CSV compatible with the slicer app.
+
+### Motivation
+
+The original `IdealBallooningSamples.csv` holds `kappa`, `delta`, `kappaprime`, `deltaprime`, `shift` constant across all 10k rows. The generator expands the parameter space by scanning kappa and delta while holding derivatives (`kappaprime`, `deltaprime`) fixed, producing new IBMgr data that can be loaded into the slicer.
+
+### Architecture
+
+| File | Purpose |
+|---|---|
+| `ibm_generator.py` | Core library — grid construction, kinetic sampling, Pyro interaction, serial & parallel solvers |
+| `generate_ibmgr.py` | CLI wrapper — argument parsing, orchestration |
+| `test_ibm_generator.py` | 14 tests — all pyrokinetics calls mocked |
+| `input.cgyro` | CGYRO template file (gitignored) |
+
+### Key Design Decisions
+
+- **CLI-first** — no GUI integration yet; output CSV can be loaded in the slicer directly.
+- **Grid scan** — Cartesian product of `kappa` × `delta` values, crossed with kinetic samples.
+- **Derivatives held fixed** — `kappaprime` and `deltaprime` come from the template and are not varied.
+- **`enforce_consistent_beta_prime()`** — called after setting geometry parameters to keep beta_prime self-consistent. Requires pyrokinetics unstable branch (≥0.8.1.dev).
+- **`_to_float()` helper** — pint Quantities must be unwrapped via `.m` (magnitude) before writing to CSV.
+- **`spawn` multiprocessing context** — `fork` deadlocks with pint/numpy; all parallel work uses `mp.get_context("spawn")`.
+- **Incremental saves** — partial CSV written every 200 rows + on SIGINT, so long scans are not lost on interruption.
+
+### CLI Usage
+
+```bash
+# Template-only scan (1 kinetic sample from the template itself)
+python generate_ibmgr.py --template input.cgyro --output scan.csv
+
+# Full scan: 100 kinetic samples × 21 kappa × 1 delta = 2100 points, 8 workers
+python generate_ibmgr.py --template input.cgyro \
+    --base-csv IdealBallooningSamples.csv --n-samples 100 \
+    --kappa-min 1.0 --kappa-max 3.0 --n-kappa 21 \
+    --n-delta 1 --workers 8 --output kappa_scan.csv
+```
+
+### Key CLI Arguments
+
+| Argument | Default | Description |
+|---|---|---|
+| `--template` | (required) | Path to CGYRO input file |
+| `--base-csv` | None | CSV to sample kinetic parameters from |
+| `--n-samples` | 100 | Number of kinetic rows to sample |
+| `--seed` | 42 | Random seed for reproducibility |
+| `--kappa-min/max` | 1.0 / 3.0 | Elongation range |
+| `--n-kappa` | 21 | Number of kappa grid points |
+| `--delta-min/max` | -0.5 / 1.0 | Triangularity range |
+| `--n-delta` | 11 | Number of delta grid points |
+| `--workers` | 1 | Number of parallel workers (spawn context) |
+| `--output` | `ibm_scan.csv` | Output CSV path |
+| `--failures-output` | `ibm_failures.csv` | Failed rows CSV path |
+
+### First Scan Results
+
+- **2100 points** (100 kinetic samples × 21 kappa × 1 delta)
+- **0 failures** — all rows solved successfully
+- **~38 minutes** with 8 workers on 8-core machine
+- Output: `kappa_scan.csv` (gitignored)
+
+### Dependencies
+
+- `pyrokinetics ≥0.8.1.dev` from unstable branch (`pip install git+https://github.com/pyro-kinetics/pyrokinetics@unstable`)
+- `pandas`, `numpy` (already in requirements.txt)
+
+### Not Yet Implemented
+
+- GUI integration (run from slicer sidebar)
+- Delta scan (infrastructure exists, not yet exercised at scale)
+- Joint kappa × delta scan
+- Automatic derivatives (kappaprime, deltaprime) — pyrokinetics does not recompute these from kappa/delta
+- Appending to existing CSV (currently overwrites)
+
