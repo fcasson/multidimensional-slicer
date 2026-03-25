@@ -21,10 +21,10 @@ NONE_OPTION = "—"  # sentinel for "no selection"
 # ---------------------------------------------------------------------------
 # Widgets — axis selectors
 # ---------------------------------------------------------------------------
-x_select = pn.widgets.Select(name="X axis", options=NUMERIC_COLS, value=NUMERIC_COLS[0])
-y_select = pn.widgets.Select(name="Y axis", options=NUMERIC_COLS, value=NUMERIC_COLS[1])
+x_select = pn.widgets.Select(name="X axis", options=NUMERIC_COLS, value="shat")
+y_select = pn.widgets.Select(name="Y axis", options=NUMERIC_COLS, value="betaprime_correct")
 z_select = pn.widgets.Select(
-    name="Z axis (optional)", options=[NONE_OPTION] + NUMERIC_COLS, value=NONE_OPTION
+    name="Z axis (optional)", options=[NONE_OPTION] + NUMERIC_COLS, value="IBMgr"
 )
 color_select = pn.widgets.Select(
     name="Colour",
@@ -191,9 +191,9 @@ def _reload_csv(_event=None):
 
 
 def _reset_controls(_event=None):
-    x_select.value = NUMERIC_COLS[0]
-    y_select.value = NUMERIC_COLS[1]
-    z_select.value = NONE_OPTION
+    x_select.value = "shat"
+    y_select.value = "betaprime_correct"
+    z_select.value = "IBMgr"
     color_select.value = (
         "betaprime_correct" if "betaprime_correct" in NUMERIC_COLS else NONE_OPTION
     )
@@ -266,6 +266,7 @@ template = pn.template.FastListTemplate(
     main=[main],
     accent_base_color="#1f77b4",
     header_background="#1f77b4",
+    theme_toggle=False,
 )
 
 template.servable()

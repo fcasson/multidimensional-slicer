@@ -14,7 +14,8 @@ class TestWidgetSetup:
 
     def test_z_has_none_option(self):
         assert app.z_select.options[0] == app.NONE_OPTION
-        assert app.z_select.value == app.NONE_OPTION
+        # Default is 3D mode with IBMgr
+        assert app.z_select.value == "IBMgr"
 
     def test_color_default_is_betaprime_correct(self):
         assert app.color_select.value == "betaprime_correct"
@@ -102,6 +103,7 @@ class TestResetControls:
         app.bool_widgets["isapar"].value = "True"
         # Reset
         app._reset_controls()
-        assert app.x_select.value == app.NUMERIC_COLS[0]
+        assert app.x_select.value == "shat"
+        assert app.y_select.value == "betaprime_correct"
+        assert app.z_select.value == "IBMgr"
         assert app.bool_widgets["isapar"].value == "Any"
-        assert app.z_select.value == app.NONE_OPTION
