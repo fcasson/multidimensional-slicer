@@ -29,7 +29,7 @@ z_select = pn.widgets.Select(
 color_select = pn.widgets.Select(
     name="Colour",
     options=[NONE_OPTION] + NUMERIC_COLS,
-    value="betaprime_correct" if "betaprime_correct" in NUMERIC_COLS else NONE_OPTION,
+    value="q" if "q" in NUMERIC_COLS else NONE_OPTION,
 )
 size_select = pn.widgets.Select(
     name="Size", options=[NONE_OPTION] + NUMERIC_COLS, value=NONE_OPTION
@@ -201,7 +201,7 @@ def _reset_controls(_event=None):
     y_select.value = "betaprime_correct"
     z_select.value = "IBMgr"
     color_select.value = (
-        "betaprime_correct" if "betaprime_correct" in NUMERIC_COLS else NONE_OPTION
+        "q" if "q" in NUMERIC_COLS else NONE_OPTION
     )
     size_select.value = NONE_OPTION
     x_log.value = False
@@ -262,9 +262,9 @@ sidebar = pn.Column(
     download_btn,
     axis_section,
     mapping_section,
+    slider_section,
     bool_section,
     discrete_section,
-    slider_section,
     scroll=True,
     width=320,
 )

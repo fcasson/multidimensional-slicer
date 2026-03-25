@@ -17,8 +17,8 @@ class TestWidgetSetup:
         # Default is 3D mode with IBMgr
         assert app.z_select.value == "IBMgr"
 
-    def test_color_default_is_betaprime_correct(self):
-        assert app.color_select.value == "betaprime_correct"
+    def test_color_default_is_q(self):
+        assert app.color_select.value == "q"
 
     def test_bool_widgets_created(self):
         assert "isapar" in app.bool_widgets
