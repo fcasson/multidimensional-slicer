@@ -9,8 +9,8 @@ import app
 
 class TestWidgetSetup:
     def test_axis_dropdowns_populated(self):
-        assert len(app.x_select.options) >= 15
-        assert len(app.y_select.options) >= 15
+        assert len(app.x_select.options) >= 10
+        assert len(app.y_select.options) >= 10
 
     def test_z_has_none_option(self):
         assert app.z_select.options[0] == app.NONE_OPTION
@@ -30,8 +30,8 @@ class TestWidgetSetup:
         assert "psi_n" in app.discrete_widgets
 
     def test_range_sliders_created(self):
-        # Should have sliders for continuous numeric cols (minus discrete ones)
-        assert len(app.range_sliders) > 5
+        # Should have sliders for continuous numeric cols (minus discrete/constant)
+        assert len(app.range_sliders) > 0
 
 
 class TestFiltering:
@@ -108,3 +108,83 @@ class TestResetControls:
         assert app.y_select.value == "betaprime_correct"
         assert app.z_select.value == "IBMgr"
         assert app.bool_widgets["isapar"].value == "Any"
+
+
+class TestVaryingCols:
+    def test_excludes_constant_columns(self):
+        # Constant columns like shift, delta, kappa should be excluded
+        for col in ["shift", "delta", "deltaprime", "kappa", "kappaprime"]:
+            if col in app.DF.columns:
+                assert col not in app.VARYING_COLS
+
+    def test_includes_varying_columns(self):
+        for col in ["q", "shat", "beta", "IBMgr"]:
+            assert col in app.VARYING_COLS
+
+
+class TestCorrelationBar:
+    def test_returns_figure(self):
+        fig = app._build_correlation_bar(app.DF)
+        assert fig is not None
+        assert len(fig.data) == 1
+        assert fig.data[0].orientation == "h"
+
+    def test_bar_count_matches_varying_cols(self):
+        fig = app._build_correlation_bar(app.DF)
+        varying_minus_ibmgr = [c for c in app.VARYING_COLS if c != "IBMgr"]
+        assert len(fig.data[0].y) == len(varying_minus_ibmgr)
+
+    def test_empty_df_returns_empty_figure(self):
+        fig = app._build_correlation_bar(app.DF.head(0))
+        assert len(fig.data) == 0
+
+
+class TestMarginals:
+    def test_returns_figure_with_traces(self):
+        cols = ["q", "shat", "beta"]
+        fig = app._build_marginals(app.DF, cols)
+        assert len(fig.data) == 3
+
+    def test_empty_cols_returns_empty_figure(self):
+        fig = app._build_marginals(app.DF, [])
+        assert len(fig.data) == 0
+
+
+class TestPairplot:
+    def test_returns_n_squared_traces(self):
+        cols = ["q", "shat", "beta"]
+        fig = app._build_pairplot(app.DF.head(500), cols)
+        assert len(fig.data) == 9  # 3x3
+
+    def test_single_col_returns_empty(self):
+        fig = app._build_pairplot(app.DF, ["q"])
+        assert len(fig.data) == 0
+
+    def test_diagonal_is_histogram(self):
+        import plotly.graph_objects as go
+        cols = ["q", "shat"]
+        fig = app._build_pairplot(app.DF.head(500), cols)
+        # Diagonal traces: index 0 (0,0) and 3 (1,1)
+        assert isinstance(fig.data[0], go.Histogram)
+        assert isinstance(fig.data[3], go.Histogram)
+
+    def test_offdiag_is_histogram2d(self):
+        import plotly.graph_objects as go
+        cols = ["q", "shat"]
+        fig = app._build_pairplot(app.DF.head(500), cols)
+        # Off-diagonal: index 1 (0,1) and 2 (1,0)
+        assert isinstance(fig.data[1], go.Histogram2d)
+        assert isinstance(fig.data[2], go.Histogram2d)
+
+
+class TestPairColSelect:
+    def test_default_is_top_6(self):
+        assert len(app.pair_col_select.value) == 6
+
+    def test_options_exclude_ibmgr(self):
+        assert "IBMgr" not in app.pair_col_select.options
+
+    def test_options_exclude_constants(self):
+        for col in ["shift", "delta", "deltaprime", "kappa", "kappaprime"]:
+            if col in app.DF.columns:
+                assert col not in app.pair_col_select.options

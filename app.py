@@ -2,6 +2,9 @@
 
 import panel as pn
 import plotly.express as px
+import plotly.graph_objects as go
+from plotly.subplots import make_subplots
+import numpy as np
 import pandas as pd
 
 from data_utils import load_and_clean, classify_columns
@@ -17,6 +20,9 @@ NUMERIC_COLS = COL_INFO["numeric"]
 BOOL_COLS = COL_INFO["bool"]
 DISCRETE_COLS = COL_INFO["discrete"]
 NONE_OPTION = "—"  # sentinel for "no selection"
+
+# Columns that actually vary (more than 1 unique value)
+VARYING_COLS = [c for c in NUMERIC_COLS if DF[c].nunique() > 1]
 
 # ---------------------------------------------------------------------------
 # Widgets — axis selectors
@@ -269,12 +275,190 @@ sidebar = pn.Column(
     width=320,
 )
 
-main = pn.Column(status_pane, update_plot, sizing_mode="stretch_both")
+slicer_tab = pn.Column(status_pane, update_plot, sizing_mode="stretch_both")
+
+# ---------------------------------------------------------------------------
+# Analysis tab — correlation ranking & pairplot
+# ---------------------------------------------------------------------------
+
+# Columns to include in the pairplot (user-selectable, minus constants)
+_pair_cols_all = [c for c in VARYING_COLS if c != "IBMgr"]
+# Default to top 6 by absolute correlation with IBMgr
+_corrs = DF[_pair_cols_all + ["IBMgr"]].corr(numeric_only=True)["IBMgr"].drop("IBMgr").abs()
+_pair_cols_default = _corrs.sort_values(ascending=False).head(6).index.tolist()
+pair_col_select = pn.widgets.CheckBoxGroup(
+    name="Pairplot columns",
+    options=_pair_cols_all,
+    value=_pair_cols_default,
+    inline=False,
+)
+
+
+def _build_correlation_bar(filtered):
+    """Horizontal bar chart of Pearson correlations with IBMgr."""
+    if "IBMgr" not in filtered.columns or len(filtered) < 3:
+        return go.Figure()
+    varying = [c for c in VARYING_COLS if c != "IBMgr"]
+    corrs = filtered[varying + ["IBMgr"]].corr(numeric_only=True)["IBMgr"].drop("IBMgr")
+    corrs = corrs.dropna().sort_values()
+    fig = go.Figure(go.Bar(
+        x=corrs.values,
+        y=corrs.index,
+        orientation="h",
+        marker_color=["#d62728" if v < 0 else "#1f77b4" for v in corrs.values],
+    ))
+    fig.update_layout(
+        title="Pearson correlation with IBMgr",
+        xaxis_title="Correlation",
+        xaxis_range=[-1, 1],
+        margin=dict(l=180, r=20, t=50, b=40),
+        template="plotly_white",
+        height=400,
+    )
+    return fig
+
+
+def _build_marginals(filtered, cols):
+    """Row of 1D histograms for each selected column."""
+    if not cols or len(filtered) < 3:
+        return go.Figure()
+    n = len(cols)
+    fig = make_subplots(rows=1, cols=n, subplot_titles=cols,
+                        horizontal_spacing=0.04)
+    for j, col in enumerate(cols):
+        vals = filtered[col].dropna()
+        fig.add_trace(
+            go.Histogram(x=vals, nbinsx=80, marker_color="#1f77b4",
+                         showlegend=False),
+            row=1, col=j + 1,
+        )
+        fig.update_xaxes(tickfont_size=8, row=1, col=j + 1)
+        fig.update_yaxes(showticklabels=False, row=1, col=j + 1)
+    fig.update_layout(
+        height=200,
+        margin=dict(l=40, r=20, t=40, b=30),
+        template="plotly_white",
+        title="Marginal distributions",
+    )
+    return fig
+
+
+def _build_pairplot(filtered, cols):
+    """NxN grid: 1D histograms on diagonal, 2D histograms off-diagonal."""
+    if len(cols) < 2 or len(filtered) < 3:
+        return go.Figure()
+    n = len(cols)
+    fig = make_subplots(
+        rows=n, cols=n,
+        shared_xaxes=False, shared_yaxes=False,
+        horizontal_spacing=0.02, vertical_spacing=0.02,
+    )
+    for i, row_col in enumerate(cols):
+        for j, col_col in enumerate(cols):
+            r, c = i + 1, j + 1
+            if i == j:
+                # Diagonal — 1D histogram
+                vals = filtered[row_col].dropna()
+                fig.add_trace(
+                    go.Histogram(x=vals, nbinsx=80, marker_color="#1f77b4",
+                                 showlegend=False),
+                    row=r, col=c,
+                )
+            else:
+                # Off-diagonal — 2D histogram
+                pair = filtered[[col_col, row_col]].dropna()
+                fig.add_trace(
+                    go.Histogram2d(
+                        x=pair[col_col], y=pair[row_col],
+                        nbinsx=80, nbinsy=80,
+                        colorscale="Blues", showscale=False,
+                        showlegend=False,
+                    ),
+                    row=r, col=c,
+                )
+            # Axis labels on edges only
+            if i == n - 1:
+                fig.update_xaxes(title_text=col_col, title_font_size=9,
+                                 tickfont_size=7, row=r, col=c)
+            else:
+                fig.update_xaxes(showticklabels=False, row=r, col=c)
+            if j == 0:
+                fig.update_yaxes(title_text=row_col, title_font_size=9,
+                                 tickfont_size=7, row=r, col=c)
+            else:
+                fig.update_yaxes(showticklabels=False, row=r, col=c)
+    cell_size = max(120, 900 // n)
+    fig.update_layout(
+        height=cell_size * n + 60,
+        width=cell_size * n + 180,
+        margin=dict(l=60, r=20, t=40, b=40),
+        template="plotly_white",
+        title="Pairwise 2D histograms",
+    )
+    return fig
+
+
+# Reactive analysis pane — correlation bar + marginals always reactive,
+# pairplot only on explicit button click.
+_corr_pane = pn.pane.Plotly(sizing_mode="stretch_width")
+_marginal_pane = pn.pane.Plotly(sizing_mode="stretch_width")
+_pairplot_container = pn.Column(sizing_mode="stretch_both")
+
+
+@pn.depends(*_all_widgets, watch=True)
+def _update_top_analysis(*_events):
+    """Recompute correlation bar and marginals on any filter change."""
+    filtered = _filter_df()
+    cols = [c for c in VARYING_COLS if c != "IBMgr"]
+    if filtered.empty or len(filtered) < 3:
+        _corr_pane.object = go.Figure()
+        _marginal_pane.object = go.Figure()
+        return
+    _corr_pane.object = _build_correlation_bar(filtered)
+    _marginal_pane.object = _build_marginals(filtered, cols)
+
+
+def _plot_2d_correlations(_event=None):
+    """Build the pairplot on button click only."""
+    filtered = _filter_df()
+    cols = pair_col_select.value
+    if filtered.empty or len(cols) < 2:
+        _pairplot_container[:] = [
+            pn.pane.Markdown("*Select at least 2 columns and ensure data matches filters.*")
+        ]
+        return
+    pair_fig = _build_pairplot(filtered, cols)
+    _pairplot_container[:] = [pn.pane.Plotly(pair_fig)]
+
+
+plot_2d_btn = pn.widgets.Button(
+    name="Plot selected 2D correlations", button_type="primary"
+)
+plot_2d_btn.on_click(_plot_2d_correlations)
+
+# Trigger initial render
+_update_top_analysis()
+
+analysis_tab = pn.Column(
+    _corr_pane,
+    _marginal_pane,
+    pn.pane.Markdown("**Select columns for 2D pairplot:**"),
+    pair_col_select,
+    plot_2d_btn,
+    _pairplot_container,
+    sizing_mode="stretch_both",
+)
+
+tabs = pn.Tabs(
+    ("Slicer", slicer_tab),
+    ("Analysis", analysis_tab),
+    sizing_mode="stretch_both",
+)
 
 template = pn.template.FastListTemplate(
     title="Ballooning Stability — Multidimensional Slicer",
     sidebar=[sidebar],
-    main=[main],
+    main=[tabs],
     accent_base_color="#1f77b4",
     header_background="#1f77b4",
     theme_toggle=False,

@@ -1,9 +1,14 @@
 """Data loading and column classification for the ballooning slicer app."""
 
+import os
+
 import pandas as pd
 from pathlib import Path
 
-CSV_PATH = Path(__file__).resolve().parent / "IdealBallooningSamples.csv"
+CSV_PATH = Path(os.environ.get(
+    "SLICER_CSV",
+    Path(__file__).resolve().parent / "IdealBallooningSamples.csv",
+))
 DISCRETE_THRESHOLD = 10  # columns with <= this many unique values are discrete
 
 
