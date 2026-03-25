@@ -244,7 +244,7 @@ class TestCLI:
         ])
         assert ret == 1
 
-    @patch("generate_ibmgr.run_ibm_scan")
+    @patch("generate_ibmgr.run_ibm_scan_parallel")
     @patch("generate_ibmgr.load_template")
     def test_template_only_run(self, mock_load, mock_run, tmp_path):
         mock_pyro = _make_mock_pyro()

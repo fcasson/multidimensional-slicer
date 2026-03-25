@@ -26,7 +26,7 @@ from ibm_generator import (
     kinetic_rows_from_template,
     load_template,
     make_geometry_grid,
-    run_ibm_scan,
+    run_ibm_scan_parallel,
     sample_base_rows,
 )
 
@@ -85,6 +85,12 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         default=None,
         help="Path for failures CSV (default: <output>_failures.csv).",
     )
+    p.add_argument(
+        "--workers",
+        type=int,
+        default=1,
+        help="Number of parallel workers (default: 1 = serial).",
+    )
 
     return p.parse_args(argv)
 
@@ -131,7 +137,10 @@ def main(argv: list[str] | None = None) -> int:
     logger.info("Total scan points: %d", len(scan_df))
 
     # Run
-    results, failures = run_ibm_scan(args.template, scan_df)
+    results, failures = run_ibm_scan_parallel(
+        args.template, scan_df, workers=args.workers,
+        output_path=args.output,
+    )
 
     # Save
     results.to_csv(args.output, index=False)
