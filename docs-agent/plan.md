@@ -185,3 +185,68 @@ python generate_ibmgr.py --template input.cgyro \
 - Automatic derivatives (kappaprime, deltaprime) — pyrokinetics does not recompute these from kappa/delta
 - Appending to existing CSV (currently overwrites)
 
+---
+
+## Phase 3: Analysis Tab, Dynamic Defaults & CI
+
+### Analysis Tab
+
+Added a second tab ("Analysis") to the slicer with three reactive/on-demand components:
+
+1. **Pearson correlation bar chart** — horizontal bar chart of absolute Pearson correlations of each varying column with `IBMgr`. Updates reactively on any filter change.
+2. **1D marginal histograms** — strip of histograms for all varying columns (80 bins). Updates reactively.
+3. **2D pairplot** — NxN grid of `Histogram2d` (off-diagonal) and `Histogram` (diagonal). On-demand via "Plot selected 2D correlations" button. Columns selectable via `CheckBoxGroup` (defaults to top 6 by correlation). Loading spinner shown while building.
+
+Constant columns (only 1 unique value) are excluded from the analysis via `VARYING_COLS`.
+
+### Dynamic Axis Defaults
+
+Axis defaults now adapt to whatever CSV is loaded. The `_default()` helper tries the preferred column name and falls back to positional indexing:
+
+```python
+def _default(preferred, cols, fallback_idx=0):
+    return preferred if preferred in cols else cols[fallback_idx]
+```
+
+This fixes the `ValueError` when loading `kappa_scan.csv` (which has no `betaprime_correct` column).
+
+### 3D Camera Persistence
+
+The slicer now uses a persistent `pn.pane.Plotly` object (`_plot_pane`) with `uirevision="keep"`. The `_update_plot` callback updates `.object` in place rather than returning a new pane, so Plotly preserves the 3D camera rotation across filter changes.
+
+### CSV Filename in Title Bar
+
+The `FastListTemplate` title now shows the loaded CSV filename: `f"Ballooning Stability — {CSV_PATH.name}"`.
+
+### SLICER_CSV Environment Variable
+
+`data_utils.py` reads `SLICER_CSV` from the environment to override the default CSV path:
+
+```bash
+SLICER_CSV=kappa_scan.csv panel serve app.py --show
+```
+
+### Test Fixture & GitHub Actions CI
+
+- `generate_test_fixture.py` creates a 100-row dummy CSV with realistic random values.
+- `tests/fixture.csv` is committed to git (`.gitignore` has `!tests/fixture.csv`).
+- `conftest.py` sets `SLICER_CSV` to `tests/fixture.csv` before imports.
+- `.github/workflows/tests.yml` runs all 53 tests on push/PR to master (Python 3.12, ubuntu-latest).
+
+### Updated Files Table
+
+| File | Purpose |
+|---|---|
+| `app.py` | Panel app — slicer + analysis tabs, dynamic defaults, persistent plot pane |
+| `data_utils.py` | Data loading, cleaning, column classification, `SLICER_CSV` support |
+| `ibm_generator.py` | Core library for IBMgr generation via pyrokinetics |
+| `generate_ibmgr.py` | CLI wrapper for geometry-parameter scans |
+| `test_app.py` | 29 tests — widgets, filtering, plots, analysis tab |
+| `test_data_utils.py` | 10 tests — data layer |
+| `test_ibm_generator.py` | 14 tests — generator (pyrokinetics mocked) |
+| `conftest.py` | Test fixture configuration |
+| `generate_test_fixture.py` | Creates 100-row dummy CSV |
+| `tests/fixture.csv` | Test fixture dataset |
+| `.github/workflows/tests.yml` | GitHub Actions CI workflow |
+| `README.md` | Updated with all features, screenshot, generator docs |
+

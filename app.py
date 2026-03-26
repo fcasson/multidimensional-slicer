@@ -7,7 +7,7 @@ from plotly.subplots import make_subplots
 import numpy as np
 import pandas as pd
 
-from data_utils import load_and_clean, classify_columns
+from data_utils import CSV_PATH, load_and_clean, classify_columns
 
 pn.extension("plotly", sizing_mode="stretch_width")
 
@@ -27,15 +27,20 @@ VARYING_COLS = [c for c in NUMERIC_COLS if DF[c].nunique() > 1]
 # ---------------------------------------------------------------------------
 # Widgets — axis selectors
 # ---------------------------------------------------------------------------
-x_select = pn.widgets.Select(name="X axis", options=NUMERIC_COLS, value="shat")
-y_select = pn.widgets.Select(name="Y axis", options=NUMERIC_COLS, value="betaprime_correct")
+def _default(preferred, cols, fallback_idx=0):
+    """Return *preferred* if it exists in *cols*, else cols[fallback_idx]."""
+    return preferred if preferred in cols else cols[fallback_idx]
+
+x_select = pn.widgets.Select(name="X axis", options=NUMERIC_COLS, value=_default("shat", NUMERIC_COLS))
+y_select = pn.widgets.Select(name="Y axis", options=NUMERIC_COLS, value=_default("betaprime_correct", NUMERIC_COLS, 1))
 z_select = pn.widgets.Select(
-    name="Z axis (optional)", options=[NONE_OPTION] + NUMERIC_COLS, value="IBMgr"
+    name="Z axis (optional)", options=[NONE_OPTION] + NUMERIC_COLS,
+    value=_default("IBMgr", [NONE_OPTION] + NUMERIC_COLS),
 )
 color_select = pn.widgets.Select(
     name="Colour",
     options=[NONE_OPTION] + NUMERIC_COLS,
-    value="q" if "q" in NUMERIC_COLS else NONE_OPTION,
+    value=_default("q", [NONE_OPTION] + NUMERIC_COLS),
 )
 size_select = pn.widgets.Select(
     name="Size", options=[NONE_OPTION] + NUMERIC_COLS, value=NONE_OPTION
@@ -165,6 +170,7 @@ def _build_plot(filtered):
         margin=dict(l=20, r=20, t=40, b=20),
         template="plotly_white",
         height=650,
+        uirevision="keep",
     )
     return fig
 
@@ -182,13 +188,21 @@ _all_widgets = (
 )
 
 
-@pn.depends(*_all_widgets, watch=False)
-def update_plot(*_events):
+_plot_pane = pn.pane.Plotly(sizing_mode="stretch_both")
+
+
+@pn.depends(*_all_widgets, watch=True)
+def _update_plot(*_events):
     filtered = _filter_df()
     status_pane.object = f"**Showing {len(filtered):,} / {len(DF):,} rows**"
     if filtered.empty:
-        return pn.pane.Markdown("*No data matches current filters.*")
-    return pn.pane.Plotly(_build_plot(filtered), sizing_mode="stretch_both")
+        _plot_pane.object = go.Figure()
+        return
+    _plot_pane.object = _build_plot(filtered)
+
+
+# Trigger initial render
+_update_plot()
 
 
 # ---------------------------------------------------------------------------
@@ -203,12 +217,10 @@ def _reload_csv(_event=None):
 
 
 def _reset_controls(_event=None):
-    x_select.value = "shat"
-    y_select.value = "betaprime_correct"
-    z_select.value = "IBMgr"
-    color_select.value = (
-        "q" if "q" in NUMERIC_COLS else NONE_OPTION
-    )
+    x_select.value = _default("shat", NUMERIC_COLS)
+    y_select.value = _default("betaprime_correct", NUMERIC_COLS, 1)
+    z_select.value = _default("IBMgr", [NONE_OPTION] + NUMERIC_COLS)
+    color_select.value = _default("q", [NONE_OPTION] + NUMERIC_COLS)
     size_select.value = NONE_OPTION
     x_log.value = False
     y_log.value = False
@@ -275,7 +287,7 @@ sidebar = pn.Column(
     width=320,
 )
 
-slicer_tab = pn.Column(status_pane, update_plot, sizing_mode="stretch_both")
+slicer_tab = pn.Column(status_pane, _plot_pane, sizing_mode="stretch_both")
 
 # ---------------------------------------------------------------------------
 # Analysis tab — correlation ranking & pairplot
@@ -378,13 +390,13 @@ def _build_pairplot(filtered, cols):
                 )
             # Axis labels on edges only
             if i == n - 1:
-                fig.update_xaxes(title_text=col_col, title_font_size=9,
-                                 tickfont_size=7, row=r, col=c)
+                fig.update_xaxes(title_text=col_col, title_font_size=13,
+                                 tickfont_size=10, row=r, col=c)
             else:
                 fig.update_xaxes(showticklabels=False, row=r, col=c)
             if j == 0:
-                fig.update_yaxes(title_text=row_col, title_font_size=9,
-                                 tickfont_size=7, row=r, col=c)
+                fig.update_yaxes(title_text=row_col, title_font_size=13,
+                                 tickfont_size=10, row=r, col=c)
             else:
                 fig.update_yaxes(showticklabels=False, row=r, col=c)
     cell_size = max(120, 900 // n)
@@ -420,6 +432,7 @@ def _update_top_analysis(*_events):
 
 def _plot_2d_correlations(_event=None):
     """Build the pairplot on button click only."""
+    _pairplot_container[:] = [pn.indicators.LoadingSpinner(value=True, size=40)]
     filtered = _filter_df()
     cols = pair_col_select.value
     if filtered.empty or len(cols) < 2:
@@ -456,7 +469,7 @@ tabs = pn.Tabs(
 )
 
 template = pn.template.FastListTemplate(
-    title="Ballooning Stability — Multidimensional Slicer",
+    title=f"Ballooning Stability — {CSV_PATH.name}",
     sidebar=[sidebar],
     main=[tabs],
     accent_base_color="#1f77b4",

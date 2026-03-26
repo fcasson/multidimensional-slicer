@@ -24,30 +24,56 @@ Filters must pass through NaN rows, otherwise most data vanishes (because `psi_n
 
 ## Defaults
 
-| Setting | Value | Rationale |
+Axis defaults are now **dynamic** — the app prefers `shat`, `betaprime_correct`, `IBMgr`, `q` but falls back to whatever columns exist in the loaded CSV. This is handled by the `_default()` helper. The same helper is used by `_reset_controls()`.
+
+| Setting | Preferred | Fallback |
 |---|---|---|
-| X axis | `shat` | Magnetic shear — key ballooning parameter |
-| Y axis | `betaprime_correct` | Corrected pressure gradient |
-| Z axis | `IBMgr` | Ideal ballooning mode growth rate (the target quantity) |
-| Colour | `q` | Safety factor — gives good visual separation |
+| X axis | `shat` | First numeric column |
+| Y axis | `betaprime_correct` | Second numeric column |
+| Z axis | `IBMgr` | `—` (none) |
+| Colour | `q` | `—` (none) |
 
 ## CSV Not in Git
 
 The CSV file (`IdealBallooningSamples.csv`) is in `.gitignore`. It must be placed at the workspace root manually. `data_utils.py` resolves the path relative to its own location via `Path(__file__).resolve().parent`.
 
+The `SLICER_CSV` environment variable overrides the default CSV path:
+
+```bash
+SLICER_CSV=kappa_scan.csv panel serve app.py --show
+```
+
+The CSV filename is displayed in the browser title bar.
+
 ## Test Suite
 
-25 tests across two files:
+53 tests across three files:
 - `test_data_utils.py` (10 tests) — loading, cleaning, column classification
-- `test_app.py` (15 tests) — widgets, filtering, plot building, reset
+- `test_app.py` (29 tests) — widgets, filtering, plot building, reset, analysis tab
+- `test_ibm_generator.py` (14 tests) — generator tests with all pyrokinetics mocked
 
-Run with: `.venv/bin/python -m pytest -v`
+Tests use a 100-row fixture CSV (`tests/fixture.csv`) so they run without the real dataset. The fixture is committed to git (`.gitignore` has `!tests/fixture.csv`). `conftest.py` sets `SLICER_CSV` to the fixture before imports.
+
+GitHub Actions CI runs all tests on push/PR to master.
+
+Run locally with: `.venv/bin/python -m pytest -v`
+
+## 3D Plot Camera Persistence
+
+The slicer uses a **persistent `pn.pane.Plotly`** object (`_plot_pane`) whose `.object` is updated in place, combined with `uirevision="keep"` in the Plotly layout. This preserves the 3D camera rotation when filters change.
+
+**Do not** return a new `pn.pane.Plotly(...)` from the update function — that creates a fresh DOM element and resets the camera.
+
+## Analysis Tab — Pairplot Performance
+
+The pairplot builds server-side in <0.5s for 2100 rows × 6 columns (36 traces). However, browser rendering of large Plotly subplot grids can feel slow. The pairplot is on-demand (button click) to avoid blocking the UI. A `LoadingSpinner` is shown while it builds.
+
+Default to top 6 columns by correlation to keep the grid manageable.
 
 ## Not Yet Implemented (from plan)
 
 - Prevent same column on multiple axes (planned but not enforced)
 - Global "slice width %" control
-- Axis scale toggles work but aren't prominent in the UI
 - Datashader path (not needed at 10k rows)
 - Save/load slice presets
 
