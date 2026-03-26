@@ -33,30 +33,42 @@ Axis defaults are now **dynamic** — the app prefers `shat`, `betaprime_correct
 | Z axis | `IBMgr` | `—` (none) |
 | Colour | `q` | `—` (none) |
 
-## CSV Not in Git
+## CSV Not in Git — OUTDATED
 
-The CSV file (`IdealBallooningSamples.csv`) is in `.gitignore`. It must be placed at the workspace root manually. `data_utils.py` resolves the path relative to its own location via `Path(__file__).resolve().parent`.
+> **Update (779166f):** CSV data files are now committed in `data/`. The original `IdealBallooningSamples.csv`, `kappa_delta_5k_narrow.csv`, and `input2.cgyro` are all tracked. `.gitignore` uses `!data/*.csv` and `!data/*.cgyro` exceptions. Scratch CSVs in the root directory are still gitignored.
 
 The `SLICER_CSV` environment variable overrides the default CSV path:
 
 ```bash
-SLICER_CSV=kappa_scan.csv panel serve app.py --show
+SLICER_CSV=data/kappa_delta_5k_narrow.csv panel serve gui/app.py --show
 ```
 
 The CSV filename is displayed in the browser title bar.
 
+## Repo Structure
+
+As of commit 779166f, the repo is organized into subdirectories:
+- `gui/` — app.py, data_utils.py
+- `ibm/` — ibm_generator.py, generate_ibmgr.py, generate_kappa_delta_scan.py, validate_ibmgr.py
+- `data/` — committed datasets and templates
+- `tests/` — test suite (53 tests)
+
+All imports use package-qualified paths (e.g. `from gui.data_utils import ...`, `from ibm.ibm_generator import ...`). Mock patch targets in tests also use qualified paths (e.g. `@patch("ibm.ibm_generator.Diagnostics")`).
+
+`data_utils.py` resolves the default CSV path relative to two parents up: `Path(__file__).resolve().parent.parent / "data" / "IdealBallooningSamples.csv"`.
+
 ## Test Suite
 
 53 tests across three files:
-- `test_data_utils.py` (10 tests) — loading, cleaning, column classification
-- `test_app.py` (29 tests) — widgets, filtering, plot building, reset, analysis tab
-- `test_ibm_generator.py` (14 tests) — generator tests with all pyrokinetics mocked
+- `tests/test_data_utils.py` (10 tests) — loading, cleaning, column classification
+- `tests/test_app.py` (29 tests) — widgets, filtering, plot building, reset, analysis tab
+- `tests/test_ibm_generator.py` (14 tests) — generator tests with all pyrokinetics mocked
 
-Tests use a 100-row fixture CSV (`tests/fixture.csv`) so they run without the real dataset. The fixture is committed to git (`.gitignore` has `!tests/fixture.csv`). `conftest.py` sets `SLICER_CSV` to the fixture before imports.
+Tests use a 100-row fixture CSV (`data/fixture.csv`) so they run without the real dataset. The fixture is committed to git. `conftest.py` sets `SLICER_CSV` to `data/fixture.csv` before imports.
 
-GitHub Actions CI runs all tests on push/PR to master.
+GitHub Actions CI runs all tests on push/PR to master: `python -m pytest tests/ -v`.
 
-Run locally with: `.venv/bin/python -m pytest -v`
+Run locally with: `.venv/bin/python -m pytest tests/ -v`
 
 ## 3D Plot Camera Persistence
 
@@ -76,6 +88,27 @@ Default to top 6 columns by correlation to keep the grid manageable.
 - Global "slice width %" control
 - Datashader path (not needed at 10k rows)
 - Save/load slice presets
+- GUI integration for IBMgr generation (run from slicer sidebar)
+
+---
+
+## 3D Plot Zoom Flicker — Critical (Fixed 26dcaa9)
+
+Range sliders fire `value` events continuously during drag, rebuilding the plot and resetting the 3D camera. Fixed by using `value_throttled` (fires only on mouse-up):
+
+```python
+val = widget.value_throttled if widget.value_throttled is not None else widget.value
+```
+
+**Testing gotcha**: `value_throttled` is a `param.Constant` on Panel RangeSlider widgets. To set it in tests:
+```python
+p = slider.param.value_throttled
+p.constant = False
+slider.value_throttled = (lo, hi)
+p.constant = True
+```
+
+Do not simply assign `slider.value_throttled = ...` without unlocking — it will raise an error.
 
 ---
 
@@ -123,16 +156,23 @@ In the original notebook (`createInputFiles.ipynb`), `pyro.local_species['ion1']
 
 | Scan | Points | Workers | Time | Failures |
 |---|---|---|---|---|
-| Kappa-only (21 × 100 kinetic) | 2100 | 8 | ~38 min | 0 |
+| Kappa-only grid (21 × 100 kinetic) | 2100 | 8 | ~38 min | 0 |
+| Kappa-delta random 500 | 500 | 8 | ~1.5 hr | 0 |
+| Kappa-delta narrow 5k (delta 0.3–0.8) | 5000 | 8 (nice 10) | ~15 hr | 0 |
 
 Rate: ~55 points/min with 8 workers on 8-core machine. Startup overhead is ~40s per scan (template loading in each spawn worker).
 
+### CPU Throttling (--nice)
+
+`generate_kappa_delta_scan.py` accepts `--nice N` (0–19) to call `os.nice(N)` before starting workers. Useful on shared machines. The 5k narrow scan was run with `--nice 10`.
+
 ### Test Suite
 
-14 tests in `test_ibm_generator.py`:
+14 tests in `tests/test_ibm_generator.py`:
 - All pyrokinetics calls are mocked (`Diagnostics`, `load_template`)
+- Mock patch targets use qualified paths: `@patch("ibm.ibm_generator.Diagnostics")`, `@patch("ibm.generate_ibmgr.run_ibm_scan_parallel")`
 - Tests cover: geometry grid, kinetic sampling, scan dataframe construction, serial scan (success/failure/mixed), CLI argument handling
-- Run with: `.venv/bin/python -m pytest test_ibm_generator.py -v`
+- Run with: `.venv/bin/python -m pytest tests/test_ibm_generator.py -v`
 
 ### Output CSV Format
 

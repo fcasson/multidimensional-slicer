@@ -70,12 +70,12 @@ TL;DR — Build a lightweight local Python app using Panel + Plotly. Use dropdow
 
 | File | Purpose |
 |---|---|
-| `app.py` | Main Panel app — layout, widgets, plotting callbacks |
-| `data_utils.py` | Data loading, cleaning, column classification |
+| `gui/app.py` | Main Panel app — layout, widgets, plotting callbacks |
+| `gui/data_utils.py` | Data loading, cleaning, column classification |
 | `requirements.txt` | `panel`, `plotly`, `pandas`, `holoviews`, `datashader` |
-| `README.md` | Run instructions (`panel serve app.py --show --autoreload`) |
+| `README.md` | Run instructions (`panel serve gui/app.py --show --autoreload`) |
 
-The CSV stays at the workspace root (`IdealBallooningSamples.csv`) — no need to move it.
+CSV data lives in `data/` (see Repo Structure below).
 
 ---
 
@@ -121,10 +121,12 @@ The original `IdealBallooningSamples.csv` holds `kappa`, `delta`, `kappaprime`, 
 
 | File | Purpose |
 |---|---|
-| `ibm_generator.py` | Core library — grid construction, kinetic sampling, Pyro interaction, serial & parallel solvers |
-| `generate_ibmgr.py` | CLI wrapper — argument parsing, orchestration |
-| `test_ibm_generator.py` | 14 tests — all pyrokinetics calls mocked |
-| `input.cgyro` | CGYRO template file (gitignored) |
+| `ibm/ibm_generator.py` | Core library — grid construction, kinetic sampling, Pyro interaction, serial & parallel solvers |
+| `ibm/generate_ibmgr.py` | CLI wrapper — argument parsing, orchestration (grid-based scans) |
+| `ibm/generate_kappa_delta_scan.py` | CLI for random kappa-delta scans — uniform geometry sampling, marginal kinetic sampling, `--nice` CPU throttle |
+| `ibm/validate_ibmgr.py` | Cross-validation script — compares generated IBMgr values against original dataset |
+| `tests/test_ibm_generator.py` | 14 tests — all pyrokinetics calls mocked |
+| `data/input2.cgyro` | CGYRO template file (committed) |
 
 ### Key Design Decisions
 
@@ -180,10 +182,103 @@ python generate_ibmgr.py --template input.cgyro \
 ### Not Yet Implemented
 
 - GUI integration (run from slicer sidebar)
-- Delta scan (infrastructure exists, not yet exercised at scale)
-- Joint kappa × delta scan
 - Automatic derivatives (kappaprime, deltaprime) — pyrokinetics does not recompute these from kappa/delta
 - Appending to existing CSV (currently overwrites)
+
+---
+
+## Kappa-Delta Scan Generator
+
+TL;DR — A separate scan script (`ibm/generate_kappa_delta_scan.py`) that uses uniform random sampling over the kappa-delta plane (rather than a Cartesian grid) and draws kinetic parameters from marginal distributions of the original dataset. Supports CPU throttling via `--nice` for running on shared machines.
+
+### Sampling Strategy
+
+- **Geometry (kappa, delta)**: uniform random within user-specified ranges.
+- **Kinetic parameters**: independent marginal sampling from `IdealBallooningSamples.csv` — each kinetic column is sampled independently from its own empirical distribution.
+- Both strategies are implemented in `ibm_generator.py` (`sample_uniform_geometry()`, `sample_independent_marginals()`).
+
+### Key CLI Arguments
+
+| Argument | Default | Description |
+|---|---|---|
+| `--template` | (required) | Path to CGYRO input file |
+| `--base-csv` | None | CSV to sample kinetic parameters from |
+| `--n-samples` | 500 | Number of random samples |
+| `--seed` | 42 | Random seed |
+| `--kappa-min/max` | 1.0 / 3.0 | Elongation range |
+| `--delta-min/max` | -0.5 / 1.0 | Triangularity range |
+| `--workers` | 1 | Parallel workers |
+| `--nice` | 0 | CPU niceness (0–19) |
+| `--output` | `kappa_delta_scan.csv` | Output CSV path |
+
+### Scans Completed
+
+| Scan | Samples | Delta range | Time | Output |
+|---|---|---|---|---|
+| Initial 500-sample | 500 | [-0.5, 1.0] | ~1.5 hr (8 workers) | `kappa_delta_scan.csv` (root, gitignored) |
+| 5000-sample narrow | 5000 | [0.3, 0.8] | ~15 hr (8 workers, nice 10) | `data/kappa_delta_5k_narrow.csv` (committed) |
+
+### Cross-Validation
+
+`ibm/validate_ibmgr.py` confirmed the pipeline is correct: for the `input2.cgyro` template's geometry parameters, the generated IBMgr matches the original dataset values.
+
+---
+
+## Repo Structure (as of 779166f)
+
+```
+gui/                    # Slicer application
+  __init__.py
+  app.py                # Main Panel app
+  data_utils.py         # Data loading/cleaning
+
+ibm/                    # IBMgr generation tools
+  __init__.py
+  ibm_generator.py      # Core library
+  generate_ibmgr.py     # Grid-based scan CLI
+  generate_kappa_delta_scan.py  # Random scan CLI
+  validate_ibmgr.py     # Cross-validation
+
+data/                   # Datasets (committed, open)
+  IdealBallooningSamples.csv    # Original 10k dataset
+  kappa_delta_5k_narrow.csv     # 5000 samples, delta [0.3, 0.8]
+  input2.cgyro                  # CGYRO template
+  fixture.csv                   # 100-row test fixture
+
+tests/                  # Test suite (53 tests)
+  __init__.py
+  conftest.py
+  test_app.py
+  test_data_utils.py
+  test_ibm_generator.py
+  generate_test_fixture.py
+
+.github/workflows/tests.yml    # CI
+```
+
+### Data Files Policy
+
+- CSV data files in `data/` are **open and committed** to git.
+- `.gitignore` uses `*.csv` with `!data/*.csv` exception, and `*.cgyro` with `!data/*.cgyro` exception.
+- Intermediate/scratch CSVs in the root directory remain gitignored.
+
+---
+
+## 3D Plot Zoom Flicker Fix (26dcaa9)
+
+Range sliders fire `value` events continuously during drag, causing repeated plot rebuilds and resetting the 3D camera. Fixed by reading `widget.value_throttled` (fires only on mouse-up) instead of `widget.value` for range sliders. The `_filter_df()` function now uses:
+
+```python
+val = widget.value_throttled if widget.value_throttled is not None else widget.value
+```
+
+**Testing note**: `value_throttled` is a `param.Constant` on Panel widgets. Tests must temporarily unlock it:
+```python
+p = slider.param.value_throttled
+p.constant = False
+slider.value_throttled = (lo, hi)
+p.constant = True
+```
 
 ---
 

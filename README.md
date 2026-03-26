@@ -12,11 +12,11 @@ python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
 
-# Launch the app (uses IdealBallooningSamples.csv by default)
-panel serve app.py --show --autoreload
+# Launch the app (uses data/IdealBallooningSamples.csv by default)
+panel serve gui/app.py --show --autoreload
 
 # Or point at a different CSV
-SLICER_CSV=kappa_scan.csv panel serve app.py --show --autoreload
+SLICER_CSV=data/kappa_delta_5k_narrow.csv panel serve gui/app.py --show --autoreload
 ```
 
 The browser will open at `http://localhost:5006/app`.
@@ -43,30 +43,43 @@ The browser will open at `http://localhost:5006/app`.
 
 ### IBMgr Generator (CLI)
 
-- **`generate_ibmgr.py`**: command-line tool that wraps [pyrokinetics](https://github.com/pyro-kinetics/pyrokinetics) to sweep geometry parameters (elongation κ, triangularity δ) across kinetic samples
+- **`ibm/generate_ibmgr.py`**: grid-based geometry scans wrapping [pyrokinetics](https://github.com/pyro-kinetics/pyrokinetics)
+- **`ibm/generate_kappa_delta_scan.py`**: random kappa-delta scans with marginal kinetic sampling and `--nice` CPU throttling
 - **Parallel execution**: `--workers N` flag for multiprocessing (spawn context)
 - **Incremental saves**: partial results written to CSV during long runs; safe to interrupt with Ctrl-C
-- **Tested**: 2,100-point κ scan completed with 0 failures
+- **Tested**: 5,000-point κ-δ scan completed with 0 failures
 
 ## Running Tests
 
 ```bash
 source .venv/bin/activate
-python -m pytest -v
+python -m pytest tests/ -v
 ```
 
 Tests also run automatically on push/PR via GitHub Actions.
 
-## Files
+## Project Structure
 
-| File | Purpose |
-|---|---|
-| `app.py` | Panel app — slicer + analysis tabs |
-| `data_utils.py` | Data loading, cleaning, column classification |
-| `ibm_generator.py` | Core library for IBMgr generation via pyrokinetics |
-| `generate_ibmgr.py` | CLI wrapper for geometry-parameter scans |
-| `test_app.py` | App tests (widgets, filtering, plots, analysis) |
-| `test_data_utils.py` | Data layer tests |
-| `test_ibm_generator.py` | Generator tests (pyrokinetics mocked) |
-| `conftest.py` | Test fixture configuration |
-| `requirements.txt` | Python dependencies |
+```
+gui/                    # Slicer application
+  app.py                  Panel app — slicer + analysis tabs
+  data_utils.py           Data loading, cleaning, column classification
+
+ibm/                    # IBMgr generation tools
+  ibm_generator.py        Core library (pyrokinetics wrapper)
+  generate_ibmgr.py       Grid-based scan CLI
+  generate_kappa_delta_scan.py  Random scan CLI
+  validate_ibmgr.py       Cross-validation script
+
+data/                   # Datasets (committed)
+  IdealBallooningSamples.csv    Original 10k dataset
+  kappa_delta_5k_narrow.csv     5000 samples, δ ∈ [0.3, 0.8]
+  input2.cgyro                  CGYRO template
+  fixture.csv                   100-row test fixture
+
+tests/                  # Test suite (53 tests)
+  test_app.py             App tests
+  test_data_utils.py      Data layer tests
+  test_ibm_generator.py   Generator tests (pyrokinetics mocked)
+  conftest.py             Test fixture configuration
+```
