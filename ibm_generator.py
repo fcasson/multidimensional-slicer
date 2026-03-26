@@ -124,7 +124,8 @@ def _apply_row_to_pyro(pyro: Pyro, row: pd.Series) -> None:
     pyro.local_species["electron"].inverse_ln = row["electron_dens_gradient"]
     pyro.local_species["ion1"].inverse_lt = row["deuterium_temp_gradient"]
     pyro.local_species["ion1"].inverse_ln = row["electron_dens_gradient"]
-    pyro.local_species["ion1"].nu = row["electron_nu"]
+    if "electron_nu" in row.index:
+        pyro.local_species["ion1"].nu = row["electron_nu"]
 
     pyro.enforce_consistent_beta_prime()
 
@@ -316,3 +317,57 @@ def run_ibm_scan_parallel(
         failures_df["run_timestamp"] = ts
 
     return results_df, failures_df
+
+
+# ---------------------------------------------------------------------------
+# Sampling helpers for independent-marginal + uniform-geometry scans
+# ---------------------------------------------------------------------------
+
+KINETIC_COLS_NO_COLLISIONS = [
+    "beta",
+    "q",
+    "shat",
+    "electron_temp_gradient",
+    "electron_dens_gradient",
+    "deuterium_temp_gradient",
+]
+
+
+def sample_independent_marginals(
+    base_csv: str | Path,
+    n_samples: int,
+    columns: list[str] | None = None,
+    seed: int = 42,
+) -> pd.DataFrame:
+    """Sample from empirical marginal distributions independently.
+
+    For each column, draws *n_samples* values with replacement from the
+    original data.  Columns are sampled independently, which breaks
+    inter-parameter correlations but gives better space-filling coverage.
+    """
+    rng = np.random.default_rng(seed)
+    df = pd.read_csv(base_csv, index_col=0)
+    if columns is None:
+        columns = KINETIC_COLS_NO_COLLISIONS
+    available = [c for c in columns if c in df.columns]
+    result = {}
+    for col in available:
+        values = df[col].dropna().values
+        result[col] = rng.choice(values, size=n_samples, replace=True)
+    return pd.DataFrame(result)
+
+
+def sample_uniform_geometry(
+    n_samples: int,
+    kappa_min: float = 1.0,
+    kappa_max: float = 3.0,
+    delta_min: float = -0.5,
+    delta_max: float = 1.0,
+    seed: int = 43,
+) -> pd.DataFrame:
+    """Sample kappa and delta from independent uniform distributions."""
+    rng = np.random.default_rng(seed)
+    return pd.DataFrame({
+        "kappa": rng.uniform(kappa_min, kappa_max, n_samples),
+        "delta": rng.uniform(delta_min, delta_max, n_samples),
+    })
