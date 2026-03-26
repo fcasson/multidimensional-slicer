@@ -27,6 +27,7 @@ Examples
 
 import argparse
 import logging
+import os
 import sys
 from pathlib import Path
 
@@ -80,12 +81,20 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         "--workers", type=int, default=1,
         help="Number of parallel workers (default: 1 = serial).",
     )
+    p.add_argument(
+        "--nice", type=int, default=0,
+        help="Increase process niceness (0-19, higher = lower priority).",
+    )
 
     return p.parse_args(argv)
 
 
 def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
+
+    if args.nice > 0:
+        os.nice(args.nice)
+        logger.info("Process niceness increased by %d", args.nice)
 
     if not args.template.exists():
         logger.error("Template file not found: %s", args.template)

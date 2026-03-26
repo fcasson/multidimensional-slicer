@@ -119,12 +119,10 @@ def _filter_df():
             # No values selected → show nothing
             mask &= False
 
-    # Range sliders
-    axes_in_use = {x_select.value, y_select.value}
-    if z_select.value != NONE_OPTION:
-        axes_in_use.add(z_select.value)
+    # Range sliders (use value_throttled when available)
     for col, widget in range_sliders.items():
-        lo, hi = widget.value
+        val = widget.value_throttled if widget.value_throttled is not None else widget.value
+        lo, hi = val
         mask &= (DF[col] >= lo) & (DF[col] <= hi) | DF[col].isna()
 
     return DF.loc[mask]
@@ -179,12 +177,14 @@ def _build_plot(filtered):
 # Reactive update
 # ---------------------------------------------------------------------------
 
-# Collect all widget references for dependency tracking
+# Collect all widget references for dependency tracking.
+# Range sliders use value_throttled (fires on mouse-up) to avoid
+# rapid re-renders that reset the 3-D camera / zoom level.
 _all_widgets = (
     [x_select, y_select, z_select, color_select, size_select, x_log, y_log, z_log]
     + list(bool_widgets.values())
     + list(discrete_widgets.values())
-    + list(range_sliders.values())
+    + [rs.param.value_throttled for rs in range_sliders.values()]
 )
 
 
