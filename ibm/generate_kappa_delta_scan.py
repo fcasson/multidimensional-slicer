@@ -33,7 +33,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from ibm_generator import (
+from ibm.ibm_generator import (
     run_ibm_scan_parallel,
     sample_independent_marginals,
     sample_uniform_geometry,

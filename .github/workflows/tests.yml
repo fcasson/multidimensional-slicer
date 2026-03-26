@@ -29,6 +29,6 @@ jobs:
 
       - name: Run tests
         env:
-          SLICER_CSV: tests/fixture.csv
+          SLICER_CSV: data/fixture.csv
         run: |
-          python -m pytest test_app.py test_data_utils.py test_ibm_generator.py -v
+          python -m pytest tests/ -v

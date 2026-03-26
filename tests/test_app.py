@@ -4,7 +4,7 @@ import pandas as pd
 import pytest
 
 # Import the app module (does not start the server)
-import app
+from gui import app
 
 
 class TestWidgetSetup:
@@ -77,10 +77,19 @@ class TestFiltering:
         mid = (slider.start + slider.end) / 2
         saved = slider.value
         slider.value = (mid, slider.end)
+        # value_throttled is a constant param; temporarily unlock it
+        p = slider.param.value_throttled
+        p.constant = False
+        slider.value_throttled = (mid, slider.end)
+        p.constant = True
         filtered = app._filter_df()
         assert len(filtered) <= len(app.DF)
         assert (filtered[col] >= mid).all()
-        slider.value = saved  # reset
+        # Reset
+        p.constant = False
+        slider.value_throttled = saved
+        p.constant = True
+        slider.value = saved
 
 
 class TestPlotBuilder:

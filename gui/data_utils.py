@@ -7,7 +7,7 @@ from pathlib import Path
 
 CSV_PATH = Path(os.environ.get(
     "SLICER_CSV",
-    Path(__file__).resolve().parent / "IdealBallooningSamples.csv",
+    Path(__file__).resolve().parent.parent / "data" / "IdealBallooningSamples.csv",
 ))
 DISCRETE_THRESHOLD = 10  # columns with <= this many unique values are discrete
 

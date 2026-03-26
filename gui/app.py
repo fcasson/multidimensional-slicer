@@ -7,7 +7,7 @@ from plotly.subplots import make_subplots
 import numpy as np
 import pandas as pd
 
-from data_utils import CSV_PATH, load_and_clean, classify_columns
+from gui.data_utils import CSV_PATH, load_and_clean, classify_columns
 
 pn.extension("plotly", sizing_mode="stretch_width")
 

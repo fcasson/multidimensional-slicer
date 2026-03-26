@@ -46,7 +46,7 @@ for i in rng.choice(N, size=5, replace=False):
 
 df = pd.DataFrame(data)
 
-out = Path(__file__).resolve().parent / "tests" / "fixture.csv"
+out = Path(__file__).resolve().parent.parent / "data" / "fixture.csv"
 out.parent.mkdir(exist_ok=True)
 df.to_csv(out)
 print(f"Wrote {len(df)} rows to {out}")

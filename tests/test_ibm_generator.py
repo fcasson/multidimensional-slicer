@@ -9,8 +9,8 @@ import numpy as np
 import pandas as pd
 import pytest
 
-import ibm_generator
-from generate_ibmgr import main as cli_main
+from ibm import ibm_generator
+from ibm.generate_ibmgr import main as cli_main
 
 
 # ---------------------------------------------------------------------------
@@ -130,8 +130,8 @@ class TestKineticRowsFromTemplate:
 
 
 class TestRunIbmScan:
-    @patch("ibm_generator.Diagnostics")
-    @patch("ibm_generator.load_template")
+    @patch("ibm.ibm_generator.Diagnostics")
+    @patch("ibm.ibm_generator.load_template")
     def test_successful_scan(self, mock_load, mock_diag_cls):
         mock_pyro = _make_mock_pyro()
         mock_load.return_value = mock_pyro
@@ -163,8 +163,8 @@ class TestRunIbmScan:
         assert results["IBMgr"].iloc[0] == pytest.approx(0.123)
         assert results["isIBMunstable"].iloc[0] == True  # noqa: E712 (numpy bool)
 
-    @patch("ibm_generator.Diagnostics")
-    @patch("ibm_generator.load_template")
+    @patch("ibm.ibm_generator.Diagnostics")
+    @patch("ibm.ibm_generator.load_template")
     def test_failure_handling(self, mock_load, mock_diag_cls):
         mock_pyro = _make_mock_pyro()
         mock_load.return_value = mock_pyro
@@ -192,8 +192,8 @@ class TestRunIbmScan:
         assert "error" in failures.columns
         assert "solver boom" in failures["error"].iloc[0]
 
-    @patch("ibm_generator.Diagnostics")
-    @patch("ibm_generator.load_template")
+    @patch("ibm.ibm_generator.Diagnostics")
+    @patch("ibm.ibm_generator.load_template")
     def test_mixed_success_and_failure(self, mock_load, mock_diag_cls):
         mock_pyro = _make_mock_pyro()
         mock_load.return_value = mock_pyro
@@ -244,8 +244,8 @@ class TestCLI:
         ])
         assert ret == 1
 
-    @patch("generate_ibmgr.run_ibm_scan_parallel")
-    @patch("generate_ibmgr.load_template")
+    @patch("ibm.generate_ibmgr.run_ibm_scan_parallel")
+    @patch("ibm.generate_ibmgr.load_template")
     def test_template_only_run(self, mock_load, mock_run, tmp_path):
         mock_pyro = _make_mock_pyro()
         mock_load.return_value = mock_pyro

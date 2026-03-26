@@ -9,8 +9,8 @@ import pandas as pd
 from pyrokinetics import Pyro
 from pyrokinetics.diagnostics import Diagnostics
 
-TEMPLATE = "input2.cgyro"
-ORIGINAL_CSV = "IdealBallooningSamples.csv"
+TEMPLATE = "data/input2.cgyro"
+ORIGINAL_CSV = "data/IdealBallooningSamples.csv"
 N_TEST = 10  # number of rows to validate
 
 

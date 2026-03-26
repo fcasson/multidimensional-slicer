@@ -21,7 +21,7 @@ import logging
 import sys
 from pathlib import Path
 
-from ibm_generator import (
+from ibm.ibm_generator import (
     build_scan_dataframe,
     kinetic_rows_from_template,
     load_template,

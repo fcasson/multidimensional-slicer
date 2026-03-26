@@ -2,7 +2,7 @@
 
 import pandas as pd
 import pytest
-from data_utils import load_and_clean, classify_columns, CSV_PATH
+from gui.data_utils import load_and_clean, classify_columns, CSV_PATH
 
 
 class TestLoadAndClean:

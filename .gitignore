@@ -2,6 +2,7 @@
 __pycache__/
 .pytest_cache/
 *.csv
-!tests/fixture.csv
+!data/*.csv
 *.cgyro
+!data/*.cgyro
 *.ipynb
